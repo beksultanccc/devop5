@@ -5,8 +5,7 @@ pipeline {
         BLUE = '\u001B[34m'
         RESET = '\u001B[0m'
         DOCKER_IMAGE = 'devops-app'
-        // Jenkins Docker ішінде болса, localhost орнына контейнер атын қолданамыз
-        APP_URL = "http://app:5000" 
+        APP_URL = 'http://localhost:5000'
     }
 
     stages {
@@ -23,7 +22,6 @@ pipeline {
         stage('Build Java App') {
             steps {
                 script {
-                    // Maven контейнері ішінде құрастыру
                     docker.image('maven:3.8-openjdk-11').inside {
                         sh 'mvn clean package'
                     }
@@ -44,7 +42,6 @@ pipeline {
             steps {
                 script {
                     echo "Docker Compose сервистерін іске қосу..."
-                    // Ескі контейнерлерді өшіріп, жаңасын қосу
                     sh 'docker-compose down -v || true'
                     sh 'docker-compose up -d'
                     echo "Сервистердің іске қосылуын күту... (20 секунд)"
@@ -58,11 +55,10 @@ pipeline {
             steps {
                 script {
                     echo "Redis тестілеу басталуда..."
-                    // RESPONSE айнымалысын дұрыс анықтау және sh ішіндегі sh-ты алып тастау
                     sh """
                         RESPONSE=\$(curl -s ${APP_URL}/)
                         echo "Жауап: \$RESPONSE"
-                        echo \$RESPONSE | grep -E "hits|message" || echo "Сөз табылмады"
+                        echo "\$RESPONSE" | grep -E "hits|message"
                     """
                 }
             }
@@ -105,7 +101,6 @@ pipeline {
         }
         failure {
             echo 'ПАЙПЛАЙН ҚАТЕМЕН АЯҚТАЛДЫ!'
-            // Қате болған жағдайда контейнер журналдарын шығару (диагностика үшін)
             sh 'docker-compose logs app || true'
         }
     }
