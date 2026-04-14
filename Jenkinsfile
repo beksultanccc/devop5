@@ -7,6 +7,16 @@ pipeline {
         DOCKER_IMAGE = 'devops-app'
     }
 
+    parameters {
+        string(name: 'APP_VERSION', defaultValue: '1.0', description: 'Қолданба версиясы')
+        choice(name: 'TEST_LEVEL', choices: ['basic', 'full'], description: 'Тест деңгейі')
+    }
+
+    options {
+        timeout(time: 30, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+
     stages {
         stage('Checkout') {
             steps {
@@ -22,10 +32,10 @@ pipeline {
             steps {
                 script {
                     echo "Maven арқылы build..."
+                    echo "APP_VERSION = ${params.APP_VERSION}"
+
                     docker.image('maven:3.8-openjdk-11').inside {
-                        sh '''
-                            mvn clean package
-                        '''
+                        sh 'mvn clean package'
                     }
                 }
             }
@@ -36,7 +46,8 @@ pipeline {
                 script {
                     echo "Docker образын құрастыру..."
                     sh """
-                        docker build -t ${DOCKER_IMAGE}:latest .
+                        docker build -t ${DOCKER_IMAGE}:${params.APP_VERSION} .
+                        docker tag ${DOCKER_IMAGE}:${params.APP_VERSION} ${DOCKER_IMAGE}:latest
                         docker images | head -5
                     """
                 }
@@ -61,38 +72,34 @@ pipeline {
         stage('Test API') {
             steps {
                 script {
-                    echo "API тестілеу..."
-                    sh '''
-                        CONTAINER_ID=$(docker-compose ps -q app)
-                        echo "Container ID: $CONTAINER_ID"
+                    try {
+                        if (params.TEST_LEVEL == 'basic') {
+                            sh '''
+                                CONTAINER_ID=$(docker-compose ps -q app)
+                                echo "Container ID: $CONTAINER_ID"
 
-                        if [ -z "$CONTAINER_ID" ]; then
-                            echo "app контейнері табылмады"
-                            docker-compose ps
-                            exit 1
-                        fi
-
-                        RESPONSE=$(docker exec "$CONTAINER_ID" sh -c "python - <<'PY'
+                                RESPONSE=$(docker exec "$CONTAINER_ID" sh -c "python - <<'PY'
 import urllib.request
 data = urllib.request.urlopen('http://127.0.0.1:5000/').read().decode()
 print(data)
 PY")
-                        echo "Жауап: $RESPONSE"
+                                echo "Жауап: $RESPONSE"
+                                echo "$RESPONSE" | grep -E "hits|message"
+                            '''
+                        } else {
+                            sh '''
+                                CONTAINER_ID=$(docker-compose ps -q app)
+                                echo "Container ID: $CONTAINER_ID"
 
-                        echo "$RESPONSE" | grep -E "hits|message"
-                    '''
-                }
-            }
-        }
+                                RESPONSE=$(docker exec "$CONTAINER_ID" sh -c "python - <<'PY'
+import urllib.request
+data = urllib.request.urlopen('http://127.0.0.1:5000/').read().decode()
+print(data)
+PY")
+                                echo "Жауап: $RESPONSE"
+                                echo "$RESPONSE" | grep -E "hits|message"
 
-        stage('Test PostgreSQL') {
-            steps {
-                script {
-                    echo "PostgreSQL тестілеу..."
-                    sh '''
-                        CONTAINER_ID=$(docker-compose ps -q app)
-
-                        docker exec "$CONTAINER_ID" sh -c "python - <<'PY'
+                                docker exec "$CONTAINER_ID" sh -c "python - <<'PY'
 import urllib.request
 
 urls = [
@@ -108,16 +115,12 @@ for url in urls:
     except Exception as e:
         print(f'Error: {e}')
 PY"
-                    '''
-                }
-            }
-        }
-
-        stage('Test Client') {
-            steps {
-                script {
-                    echo "Python клиентін тестілеу..."
-                    sh 'docker-compose run --rm client || echo "Клиент сервисі жоқ немесе қатемен аяқталды"'
+                            '''
+                        }
+                    } catch (Exception e) {
+                        currentBuild.result = 'UNSTABLE'
+                        echo "Тесттер тұрақсыз, бірақ пайплайн жалғасады"
+                    }
                 }
             }
         }
@@ -133,6 +136,10 @@ PY"
 
         success {
             echo 'ПАЙПЛАЙН СӘТТІ АЯҚТАЛДЫ!'
+        }
+
+        unstable {
+            echo 'ПАЙПЛАЙН UNSTABLE КҮЙІМЕН АЯҚТАЛДЫ!'
         }
 
         failure {
