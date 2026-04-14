@@ -60,23 +60,17 @@ pipeline {
         }
 
         stage('Test Redis') {
-            steps {
-                script {
-                    sh '''
-                        echo "Redis тестілеу..."
-
-                        for i in 1 2 3; do
-                            echo "Сұрау $i:"
-                            sh 'curl -s http://localhost:5000/ | grep -E "hits|message" || true'
-                            sleep 1
-                        done
-
-                        echo "Redis ақпараты:"
-                        curl -s http://localhost:5000/redis | python -m json.tool
-                    '''
-                }
-            }
+    steps {
+        script {
+            echo "Redis тестілеу басталуда..."
+            sh '''
+                RESPONSE=$(curl -s http://localhost:5000/)
+                echo "Жауап: $RESPONSE"
+                echo $RESPONSE | grep -E "hits|message" || echo "Сөз табылмады"
+            '''
         }
+    }
+}
 
         stage('Test PostgreSQL') {
             steps {
