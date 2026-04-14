@@ -5,6 +5,8 @@ pipeline {
         BLUE = '\u001B[34m'
         RESET = '\u001B[0m'
         DOCKER_IMAGE = 'devops-app'
+        CLUSTER_URL = 'https://your-k8s-api-server:6443'
+        CLUSTER_NAMESPACE = 'default'
     }
 
     parameters {
@@ -124,21 +126,26 @@ PY"
                 }
             }
         }
+
+        stage('Deploy to Kubernetes') {
+            when {
+                branch 'main'
+            }
+            steps {
+                script {
+                    echo "Kubernetes-ке deploy басталды..."
+                }
+                withKubeConfig([credentialsId: 'kubernetes-creds',
+                                serverUrl: "${CLUSTER_URL}",
+                                namespace: "${CLUSTER_NAMESPACE}"]) {
+                    sh 'kubectl apply -f redis-deployment.yaml'
+                    sh 'kubectl apply -f app-deployment.yaml'
+                    sh 'kubectl rollout status deployment/java-app-deployment'
+                }
+            }
+        }
     }
-stage('Deploy to Kubernetes') {
-  when {
-    branch 'main'
-  }
-  steps {
-    withKubeConfig([credentialsId: 'kubernetes-creds',
-                    serverUrl: "${CLUSTER_URL}",
-                    namespace: "${CLUSTER_NAMESPACE}"]) {
-      sh 'kubectl apply -f redis-deployment.yaml'
-      sh 'kubectl apply -f app-deployment.yaml'
-      sh 'kubectl rollout status deployment/java-app-deployment'
-    }
-  }
-}
+
     post {
         always {
             script {
