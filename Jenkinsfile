@@ -1,201 +1,144 @@
-pipeline { 
-
-    agent any 
-    stages { 
-        stage('Checkout Code') { 
-
-            steps { 
-                echo 'Забираем код из GitHub...' 
-
-                checkout scm 
-
-            } 
-        } 
-        stage('Check Files') { 
-
-            steps { 
-
-                echo '📄 Проверяем созданные файлы...' 
-
-                sh ''' 
-
-                    echo "=== ФАЙЛЫ В РЕПОЗИТОРИИ ===" 
-
-                    ls -la 
-
-                    echo "" 
-
-                    echo "=== ПРОВЕРКА НАШИХ ФАЙЛОВ ===" 
-
-                    if [ -f Dockerfile ]; then 
-
-                        echo "Dockerfile найден" 
-
-                        echo "Содержимое Dockerfile:" 
-
-                        head -10 Dockerfile 
-
-                    else 
-
-                        echo "Dockerfile не найден" 
-
-                    fi 
-
-                     
-
-                    if [ -f requirements.txt ]; then 
-
-                        echo "requirements.txt найден" 
-
-                    else 
-
-                        echo "requirements.txt не найден" 
-
-                    fi 
-
-                     
-
-                    if [ -d src ]; then 
-
-                        echo "Папка src найдена" 
-
-                        if [ -f src/app.py ]; then 
-
-                            echo "Файл src/app.py найден" 
-
-                        else 
-
-                            echo "Файл src/app.py не найден" 
-
-                        fi 
-
-                    else 
-
-                        echo "Папка src не найдена" 
-
-                    fi 
-
-                     
-
-                    if [ -f .dockerignore ]; then 
-
-                        echo ".dockerignore найден" 
-
-                    else 
-
-                        echo ".dockerignore не найден" 
-
-                    fi 
-
-                ''' 
-
-            } 
-
-        } 
-        stage('Docker Theory') { 
-
-            steps { 
-
-                echo 'ТЕОРИЯ DOCKER' 
-
-                echo 'Если бы Jenkins не был в Docker, мы бы выполнили:' 
-
-                echo '1. docker build -t my-app .' 
-
-                echo '2. docker run -d -p 8081:5000 my-app' 
-
-                echo '3. curl http://localhost:8081/health' 
-
-                echo '' 
-
-                echo 'Но так как Jenkins в Docker, эти команды могут не работать.' 
-
-                echo 'Это нормально! Главное - понять процесс.' 
-
-            } 
-
-        } 
-
-         
-
-        // СТАДИЯ 4: Попробуем Docker команды (не обязательно) 
-
-        stage('Try Docker Commands') { 
-
-            steps { 
-
-                echo '🔧 Пробуем Docker команды...' 
-
-                script { 
-
-                    try { 
-
-                        // Пробуем проверить Docker 
-
-                        sh 'docker --version || echo "Docker не доступен"' 
-
-                         
-
-                        // Пробуем собрать образ (может не работать) 
-
-                        sh ''' 
-
-                            echo "Пробуем собрать Docker образ..." 
-
-                            docker build -t test-image . 2>/dev/null || echo "Не удалось собрать образ" 
-
-                        ''' 
-
-                    } catch (Exception e) { 
-
-                        echo "Docker команды не работают. Это ожидаемо!" 
-
-                        echo "Причина: Jenkins запущен внутри Docker контейнера" 
-
-                    } 
-
-                } 
-
-            } 
-
-        } 
-
-    } 
-
-     
-
-    post { 
-
-        always { 
-
-            echo ' === ИТОГ РАБОТЫ ===' 
-
-            sh ''' 
-
-                echo "Дата: $(date)" 
-
-                echo "Процесс CI/CD понятен?" 
-
-                echo "1. Код → GitHub" 
-
-                echo "2. GitHub → Jenkins" 
-
-                echo "3. Jenkins проверяет файлы" 
-
-                echo "4. Docker теория изучена" 
-
-            ''' 
-        } 
-        success { 
-            echo 'ОТЛИЧНО! Вы поняли процесс CI/CD!' 
-            echo 'Даже если Docker не работал - вы молодец!' 
-            echo 'На следующем уроке настроим Docker правильно.' 
-
-        } 
-        failure { 
-            echo 'Были ошибки, но это часть обучения!' 
-            echo 'Главное - файлы созданы и процесс понят.' 
-
-        } 
-    } 
-} 
+pipeline {
+    agent any
+
+    environment {
+        BLUE = '\u001B[34m'
+        RESET = '\u001B[0m'
+        DOCKER_IMAGE = 'devops-app'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                    echo "${BLUE}GitHub-тан код алу${RESET}"
+                }
+                checkout scm
+                sh 'ls -la'
+            }
+        }
+
+        stage('Build Java App') {
+            steps {
+                script {
+                    docker.image('maven:3.8-openjdk-11').inside {
+                        sh '''
+                            cd app
+                            echo "Maven dependency-лерді жүктеу..."
+                            mvn dependency:go-offline
+
+                            echo "Қолданбаны құрастыру..."
+                            mvn clean package assembly:single -DskipTests
+
+                            echo "Құрастырылған файлдар:"
+                            ls -la target/
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    sh """
+                        echo "Docker образын құрастыру..."
+                        docker build -t ${DOCKER_IMAGE} .
+                        docker tag ${DOCKER_IMAGE} devops-app:latest
+                        docker images | head -5
+                    """
+                }
+            }
+        }
+
+        stage('Start Services') {
+            steps {
+                script {
+                    sh '''
+                        echo "Docker Compose сервистерін іске қосу..."
+                        docker-compose down -v || true
+                        docker-compose up -d
+                        echo "Сервистердің іске қосылуын күту... (20 секунд)"
+                        sleep 20
+                        docker-compose ps
+                    '''
+                }
+            }
+        }
+
+        stage('Test Redis') {
+            steps {
+                script {
+                    sh '''
+                        echo "Redis тестілеу..."
+
+                        for i in 1 2 3; do
+                            echo "Сұрау $i:"
+                            curl -s http://localhost:5000/ | grep -E "hits|message"
+                            sleep 1
+                        done
+
+                        echo "Redis ақпараты:"
+                        curl -s http://localhost:5000/redis | python -m json.tool
+                    '''
+                }
+            }
+        }
+
+        stage('Test PostgreSQL') {
+            steps {
+                script {
+                    sh '''
+                        echo "PostgreSQL тестілеу..."
+
+                        curl -s "http://localhost:5000/add-user?name=JenkinsUser1"
+                        curl -s "http://localhost:5000/add-user?name=JenkinsUser2"
+                        curl -s "http://localhost:5000/add-user?name=JenkinsUser3"
+
+                        echo "Пайдаланушылар тізімі:"
+                        curl -s http://localhost:5000/users | python -m json.tool
+                    '''
+                }
+            }
+        }
+
+        stage('Test Client') {
+            steps {
+                script {
+                    sh '''
+                        echo "Python клиентін тестілеу..."
+                        docker-compose run --rm client || echo "Клиент қатемен аяқталды"
+                    '''
+                }
+            }
+        }
+
+        stage('Cleanup') {
+            steps {
+                script {
+                    sh '''
+                        echo "Тазалау..."
+                        docker-compose down -v || true
+                        echo "Контейнерлер тазаланды"
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo "Тазалау жұмыстары"
+            sh 'docker-compose down -v || true'
+        }
+
+        success {
+            echo 'ПАЙПЛАЙН СӘТТІ АЯҚТАЛДЫ!'
+        }
+
+        failure {
+            echo 'ПАЙПЛАЙН ҚАТЕМЕН АЯҚТАЛДЫ!'
+            echo 'Қателерді тексеріңіз'
+        }
+    }
+}
