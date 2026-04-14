@@ -52,17 +52,20 @@ pipeline {
         }
 
         stage('Test Redis') {
-            steps {
-                script {
-                    echo "Redis тестілеу басталуда..."
-                    sh """
-                        RESPONSE=\$(curl -s ${APP_URL}/)
-                        echo "Жауап: \$RESPONSE"
-                        echo "\$RESPONSE" | grep -E "hits|message"
-                    """
-                }
-            }
+    steps {
+        script {
+            sh '''
+                RESPONSE=$(docker exec $(docker-compose ps -q app) python - <<'PY'
+import urllib.request
+print(urllib.request.urlopen("http://127.0.0.1:5000/").read().decode())
+PY
+)
+                echo "$RESPONSE"
+                echo "$RESPONSE" | grep -E "hits|message"
+            '''
         }
+    }
+}
 
         stage('Test PostgreSQL') {
             steps {
