@@ -64,7 +64,7 @@ pipeline {
         script {
             echo "Redis тестілеу басталуда..."
             sh '''
-                RESPONSE=$(curl -s http://localhost:5000/)
+                sh 'curl -s http://172.17.0.1:5000/'
                 echo "Жауап: $RESPONSE"
                 echo $RESPONSE | grep -E "hits|message" || echo "Сөз табылмады"
             '''
