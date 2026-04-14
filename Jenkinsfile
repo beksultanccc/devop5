@@ -125,7 +125,20 @@ PY"
             }
         }
     }
-
+stage('Deploy to Kubernetes') {
+  when {
+    branch 'main'
+  }
+  steps {
+    withKubeConfig([credentialsId: 'kubernetes-creds',
+                    serverUrl: "${CLUSTER_URL}",
+                    namespace: "${CLUSTER_NAMESPACE}"]) {
+      sh 'kubectl apply -f redis-deployment.yaml'
+      sh 'kubectl apply -f app-deployment.yaml'
+      sh 'kubectl rollout status deployment/java-app-deployment'
+    }
+  }
+}
     post {
         always {
             script {
