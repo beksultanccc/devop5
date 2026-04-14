@@ -19,24 +19,17 @@ pipeline {
         }
 
         stage('Build Java App') {
-            steps {
-                script {
-                    docker.image('maven:3.8-openjdk-11').inside {
-                        sh '''
-                            cd app
-                            echo "Maven dependency-лерді жүктеу..."
-                            mvn dependency:go-offline
-
-                            echo "Қолданбаны құрастыру..."
-                            mvn clean package assembly:single -DskipTests
-
-                            echo "Құрастырылған файлдар:"
-                            ls -la target/
-                        '''
-                    }
-                }
+    steps {
+        script {
+            docker.image('maven:3.8-openjdk-11').inside {
+                sh '''
+                    echo "Қолданбаны құрастыру..."
+                    mvn clean package
+                '''
             }
         }
+    }
+}
 
         stage('Build Docker Image') {
             steps {
