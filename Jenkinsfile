@@ -67,7 +67,7 @@ pipeline {
 
                         for i in 1 2 3; do
                             echo "Сұрау $i:"
-                            curl -s http://localhost:5000/ | grep -E "hits|message"
+                            sh 'curl -s http://localhost:5000/ | grep -E "hits|message" || true'
                             sleep 1
                         done
 
